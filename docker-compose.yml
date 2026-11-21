@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: certiflow
+      POSTGRES_PASSWORD: certiflow
+      POSTGRES_DB: certiflow
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U certiflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    command: redis-server --appendonly yes
+    volumes: [redisdata:/data]
+  api:
+    build: ./server
+    environment:
+      DATABASE_URL: postgresql://certiflow:certiflow@db:5432/certiflow
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: local-demo-secret-change-me
+      PORT: 4000
+    ports: ["4000:4000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_started}
+  worker:
+    build: ./server
+    command: npm run worker
+    environment:
+      DATABASE_URL: postgresql://certiflow:certiflow@db:5432/certiflow
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: local-demo-secret-change-me
+    depends_on:
+      api: {condition: service_healthy}
+      redis: {condition: service_started}
+      db: {condition: service_healthy}
+  web:
+    build: ./client
+    ports: ["5173:5173"]
+    depends_on: [api]
+volumes:
+  pgdata:
+  redisdata:

@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CENTRE
+  DISTRICT
+  QUALITY
+  STATE
+}
+
+enum BatchStatus {
+  DRAFT
+  SUBMITTED
+  DISTRICT_REVIEW
+  QUALITY_REVIEW
+  STATE_REVIEW
+  RETURNED
+  REJECTED
+  APPROVED
+}
+
+enum Decision {
+  APPROVE
+  REJECT
+  RETURN
+}
+
+model User {
+  id       String  @id @default(cuid())
+  username String  @unique
+  name     String
+  role     Role
+  district String?
+}
+
+model Batch {
+  id          String      @id @default(cuid())
+  name        String
+  centreId    String
+  status      BatchStatus @default(DRAFT)
+  size        Int         @default(0)
+  createdAt   DateTime    @default(now())
+  submittedAt DateTime?
+  updatedAt   DateTime    @updatedAt
+  candidates  Candidate[]
+  votes       Vote[]
+  audits      Audit[]
+}
+
+model Candidate {
+  id          String       @id @default(cuid())
+  name        String
+  email       String
+  course      String
+  score       Int
+  batchId     String
+  batch       Batch        @relation(fields: [batchId], references: [id])
+  certificate Certificate?
+
+  @@unique([batchId, email])
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  batchId   String
+  batch     Batch    @relation(fields: [batchId], references: [id])
+  userId    String
+  decision  Decision
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([batchId, userId])
+}
+
+model Certificate {
+  id          String     @id @default(cuid())
+  candidateId String     @unique
+  candidate   Candidate  @relation(fields: [candidateId], references: [id])
+  number      String     @unique
+  token       String     @unique
+  status      String     @default("VALID")
+  issuedAt    DateTime   @default(now())
+  cancelledAt DateTime?
+  deliveries  Delivery[]
+}
+
+model Audit {
+  id        String   @id @default(cuid())
+  batchId   String
+  batch     Batch    @relation(fields: [batchId], references: [id])
+  actorId   String
+  action    String
+  detail    String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model Delivery {
+  id           String      @id @default(cuid())
+  certificateId String      @unique
+  certificate  Certificate @relation(fields: [certificateId], references: [id])
+  status       String      @default("QUEUED")
+  attempts     Int         @default(0)
+  providerRef  String?
+  updatedAt    DateTime    @updatedAt
+}
